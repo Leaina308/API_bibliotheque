@@ -10,6 +10,8 @@ tags:
   - name: Authors
   - name: Books
   - name: Borrows
+  - name: Subscriptions
+  - name: Webhooks
 
 paths:
   /auth/login:
@@ -263,6 +265,11 @@ paths:
                     properties:
                       data: { $ref: '#/components/schemas/Borrow' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: Abonnement gratuit, limite de 2 emprunts actifs atteinte
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422':
           description: Données invalides ou livre indisponible
@@ -296,6 +303,128 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
+  /books/{id}/summary:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [Books]
+      summary: Générer (et sauvegarder) le résumé d'un livre via l'IA
+      description: Si le livre a déjà un résumé, il est renvoyé sans nouvel appel à l'IA.
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Résumé généré ou résumé existant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SummaryResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    get:
+      tags: [Books]
+      summary: Lire le résumé existant d'un livre
+      responses:
+        '200':
+          description: Résumé du livre
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SummaryResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /books/smart-search:
+    post:
+      tags: [Books]
+      summary: Recherche par description en langage naturel
+      description: L'IA extrait des mots-clés, puis la recherche est faite en base (titre, résumé, auteur).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SmartSearchInput' }
+      responses:
+        '200':
+          description: Mots-clés extraits et livres correspondants
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SmartSearchResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /subscriptions/payment-intent:
+    post:
+      tags: [Subscriptions]
+      summary: Créer un PaymentIntent Stripe (abonnement premium, 5 €)
+      description: Mode test Stripe. Les métadonnées user_id et plan identifient l'utilisateur dans le webhook.
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: PaymentIntent créé
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentIntentResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /subscriptions/status:
+    get:
+      tags: [Subscriptions]
+      summary: Statut d'abonnement de l'utilisateur connecté
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Statut d'abonnement
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionStatusResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /webhooks/stripe:
+    post:
+      tags: [Webhooks]
+      summary: Réception des événements Stripe
+      description: >
+        Pas de JWT : l'authenticité est vérifiée par la signature HMAC-SHA256
+        (en-tête Stripe-Signature). payment_intent.succeeded passe l'utilisateur en premium.
+      security: []
+      parameters:
+        - name: Stripe-Signature
+          in: header
+          required: true
+          schema: { type: string, example: 't=1700000000,v1=5257a869e7ec...' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StripeEvent' }
+      responses:
+        '200':
+          description: Événement reçu
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received: { type: boolean, example: true }
+        '401':
+          description: Signature absente ou invalide
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
 components:
   securitySchemes:
     BearerAuth:
@@ -323,6 +452,12 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
           example: { success: false, message: Ressource introuvable }
+    ServiceUnavailable:
+      description: Service externe (IA ou Stripe) indisponible ou non configuré
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example: { success: false, message: 'Service IA indisponible (HTTP 500)' }
     ValidationError:
       description: Validation échouée
       content:
@@ -425,9 +560,75 @@ components:
         book_id: { type: integer, example: 2 }
         borrowed_at: { type: string, example: '2026-11-18 11:00:00' }
         returned_at: { type: string, nullable: true, example: null }
+        payment_status: { type: string, enum: [pending, paid, free], example: free }
     BorrowInput:
       type: object
       required: [user_name, book_id]
       properties:
         user_name: { type: string, example: Jean Rakoto }
         book_id: { type: integer, example: 2 }
+    SummaryResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, example: Résumé généré }
+        data:
+          type: object
+          properties:
+            book_id: { type: integer, example: 1 }
+            title: { type: string, example: Clean Code }
+            summary: { type: string, example: 'Clean Code est un guide pratique pour écrire du code lisible...' }
+            generated_by: { type: string, example: gpt-4o-mini }
+            generated_at: { type: string, format: date-time, example: '2026-11-25T08:15:00Z' }
+    SmartSearchInput:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string, example: un livre sur les bonnes pratiques de programmation en Java }
+    SmartSearchResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        query: { type: string }
+        keywords: { type: array, items: { type: string }, example: [programmation, Java, bonnes pratiques] }
+        data: { type: array, items: { $ref: '#/components/schemas/Book' } }
+    PaymentIntentResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, example: OK }
+        data:
+          type: object
+          properties:
+            client_secret: { type: string, example: pi_3Px..._secret_... }
+            amount: { type: integer, example: 500, description: Montant en centimes }
+            currency: { type: string, example: eur }
+            publishable_key: { type: string, example: pk_test_... }
+    SubscriptionStatusResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string }
+        data:
+          type: object
+          properties:
+            user_id: { type: integer, example: 1 }
+            subscription_status: { type: string, enum: [free, premium] }
+            borrow_limit: { type: integer, nullable: true, example: 2, description: null = illimité }
+    StripeEvent:
+      type: object
+      properties:
+        type: { type: string, example: payment_intent.succeeded }
+        data:
+          type: object
+          properties:
+            object:
+              type: object
+              properties:
+                id: { type: string, example: pi_3Px... }
+                amount: { type: integer, example: 500 }
+                metadata:
+                  type: object
+                  properties:
+                    user_id: { type: string, example: '1' }
+                    plan: { type: string, example: premium }
