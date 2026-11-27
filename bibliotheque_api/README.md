@@ -77,7 +77,8 @@ URL de base : `http://localhost:8000/api/v1`
 | POST | `/authors` | Oui | Créer un auteur |
 | PUT | `/authors/{id}` | Oui | Modifier un auteur |
 | DELETE | `/authors/{id}` | Oui | Supprimer un auteur |
-| GET | `/books` | Non | Liste des livres (filtre `?available=true\|false`) |
+| GET | `/books` | Non | Liste des livres (filtre `?
+available=true\|false`) |
 | GET | `/books/{id}` | Non | Détails d'un livre |
 | POST | `/books` | Oui | Créer un livre |
 | PUT | `/books/{id}` | Oui | Modifier un livre |
@@ -85,6 +86,14 @@ URL de base : `http://localhost:8000/api/v1`
 | GET | `/borrows` | Oui | Emprunts en cours |
 | POST | `/borrows` | Oui | Emprunter un livre |
 | PATCH | `/borrows/{id}/return` | Oui | Rendre un livre |
+
+#  Nouvelle endpoints dans devoir 6 : 
+| POST | `/books/{id}/summary` | Oui | génère et sauvegarde |
+| GET | `/books/{id}/summary` | Non | lit le résumé existant |
+| POST | `/books/smart-search` | Non | Recherche par description naturelle |
+| POST | `/subscriptions/payment-intent` | Oui | Crée un PaymentIntent Stripe |
+| GET | `/subscriptions/status` | Oui | Statut d'abonnement de l'utilisateur |
+| POST | `/webhooks/stripe` | Non | Reçoit les événements Stripe |
 
 Les routes protégées demandent l'en-tête `Authorization: Bearer <token>`.
 
@@ -121,7 +130,7 @@ curl -s -X POST localhost:8000/api/v1/borrows \
 
 ## Tests avec Postman
 
-1. Importez la collection `collection_bibliotheque_NomPrenom.json` et les environnements `env_dev_NomPrenom.json` et `env_prod_NomPrenom.json` (menu **Import**).
+1. Importez la collection `API-Bibliotheque-Aina.postman_collection.json` et les environnements `Devellopement.postman_environment.json` et `Production.postman_environment.json` (menu **Import**).
 2. Sélectionnez l'environnement **Développement**.
 3. Lancez le serveur (`npm run dev`) et remplissez la base (`npm run seed`).
 4. Lancez la collection avec le **Runner** (ordre : Login, Create author, Create book, Get book, Create borrow, Return, Delete). Tous les tests doivent être verts.
@@ -130,7 +139,7 @@ En ligne de commande :
 
 ```bash
 sudo npm i -g newman
-newman run collection_bibliotheque_NomPrenom.json -e env_dev_NomPrenom.json
+newman run API-Bibliotheque-Aina.postman_collection.json -e Devellopement.postman_environment.json
 ```
 
 ## Structure du projet
@@ -142,9 +151,9 @@ bibliotheque_api/
 │   ├── app.js
 │   ├── db.js
 │   ├── seed.js
-│   ├── utils/response.js
-│   ├── middleware/auth.js
-│   └── routes/ (auth.js, authors.js, books.js, borrows.js)
+│   ├── utils/response.js, asyncHandler.js
+│   ├── middleware/auth.js, borrowlimit.js
+│   └── routes/ (auth.js, authors.js, books.js, borrows.js, booiAi.js, subscription.js, webhooks.js)
 ├── openapi.yaml
 ├── .env.example
 ├── .gitignore
@@ -153,4 +162,5 @@ bibliotheque_api/
 
 ## Auteur
 
-Projet réalisé dans le cadre du devoir de documentation d'API. Nom : ANDRINIAINA Tahinjanahary
+Projet réalisé dans le cadre du devoir de documentation d'API et API tierces. 
+Nom : ANDRINIAINA Tahinjanahary
