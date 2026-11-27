@@ -21,7 +21,7 @@ node -v && npm -v
 ## Installation
 
 ```bash
-git clone <url-du-depot> bibliotheque_api
+git clone https://github.com/Leaina308/API_bibliotheque
 cd bibliotheque_api
 npm install
 cp .env.example .env
